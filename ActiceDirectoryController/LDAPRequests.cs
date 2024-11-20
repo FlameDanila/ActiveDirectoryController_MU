@@ -18,23 +18,11 @@ namespace ActiveDirectoryController
     public class LDAPRequests
     {
         private static string? ldapServer = System.Configuration.ConfigurationManager.AppSettings.Get("ldapServer");
-        public static List<ADUser>? GetUsersList(string ldapUsername, string ldapPassword, out string? ldapError, out int counter)
+        private static string? ldapDomain = System.Configuration.ConfigurationManager.AppSettings.Get("ldapDomain");
+        public static List<ADUser>? GetUsersList(out string? ldapError, out int counter)
         {
             //Main2();
-            ldapUsername = "TMN\\" + ldapUsername;
-            // Укажите учетные данные для подключения к серверу
-
-            // Создайте объект LdapDirectoryIdentifier для указания сервера и порта
-            LdapDirectoryIdentifier identifier = new LdapDirectoryIdentifier(ldapServer);
-
-            // Создайте объект NetworkCredential для указания учетных данных
-            NetworkCredential credential = new NetworkCredential(ldapUsername, ldapPassword);
-
-            // Создайте соединение с сервером LDAP
-            LdapConnection connection = new LdapConnection(identifier, credential)
-            {
-                AuthType = AuthType.Basic // Укажите тип аутентификации
-            };
+            LdapConnection connection = CreateLdapConnection();
 
             try
             {
@@ -87,23 +75,112 @@ namespace ActiveDirectoryController
                 ldapError = $"LDAP Error: {ex.Message}"; counter = 0; return null; 
             }
         }
+        public static List<ADUser>? GetUsersList(string ldapUsername, string ldapPassword, out string? ldapError, out int counter)
+        {
+            //Main2();
+            LdapConnection connection = CreateLdapConnection(ldapUsername, ldapPassword);
+
+            try
+            {
+                counter = 0;
+
+                // Создайте запрос LDAP
+                string searchBase = "DC=tmn,DC=martinural,DC=ru"; // Базовый DN для поиска
+                string searchFilter = $"(objectClass=user)"; // Фильтр поиска
+
+                SearchRequest request = new SearchRequest(
+                    searchBase, // Базовый DN
+                    searchFilter, // Фильтр поиска
+                    System.DirectoryServices.Protocols.SearchScope.Subtree, // Область поиска
+                    ["sAMAccountName", "CN"] // Атрибуты для выборки (null означает выбрать все атрибуты)
+                );
+
+                // Отправьте запрос
+                SearchResponse response = (SearchResponse)connection.SendRequest(request);
+
+                // Обработайте результат
+                if (response.Entries.Count != 0)
+                {
+                    List<ADUser> listADUsers = new List<ADUser>();
+                    foreach (SearchResultEntry entry in response.Entries)
+                    {
+                        ADUser _aDUser = new ADUser();
+                        if (entry.Attributes.Contains("sAMAccountName"))
+                        {
+                            _aDUser.sAMAccountName = GetStringFromAttribute(entry.Attributes["sAMAccountName"][0]);
+                        }
+
+                        if (entry.Attributes.Contains("cn"))
+                        {
+                            _aDUser.cName = GetStringFromAttribute(entry.Attributes["cn"][0]);
+                        }
+                        listADUsers.Add(_aDUser);
+                        counter++;
+                    }
+                    ldapError = null;
+                    return listADUsers;
+                }
+                else
+                {
+                    ldapError = null;
+                    return null;
+                }
+            }
+            catch (LdapException ex)
+            {
+                ldapError = $"LDAP Error: {ex.Message}"; counter = 0; return null;
+            }
+        }
         public static String? GetUserName(string? cName, string ldapUsername, string ldapPassword, out string? ldapError)
         {
 
-            ldapUsername = "TMN\\" + ldapUsername;
-            // Укажите учетные данные для подключения к серверу
+            LdapConnection connection = CreateLdapConnection();
 
-            // Создайте объект LdapDirectoryIdentifier для указания сервера и порта
-            LdapDirectoryIdentifier identifier = new LdapDirectoryIdentifier(ldapServer);
-
-            // Создайте объект NetworkCredential для указания учетных данных
-            NetworkCredential credential = new NetworkCredential(ldapUsername, ldapPassword);
-
-            // Создайте соединение с сервером LDAP
-            LdapConnection connection = new LdapConnection(identifier, credential)
+            try
             {
-                AuthType = AuthType.Basic // Укажите тип аутентификации
-            };
+                // Создайте запрос LDAP
+                string searchBase = "DC=tmn,DC=martinural,DC=ru"; // Базовый DN для поиска
+                string searchFilter = $"(&(cn=*{cName}*)(objectClass=user))"; // Фильтр поиска
+
+                SearchRequest request = new SearchRequest(
+                    searchBase, // Базовый DN
+                    searchFilter, // Фильтр поиска
+                    System.DirectoryServices.Protocols.SearchScope.Subtree, // Область поиска
+                    ["sAMAccountName"] // Атрибуты для выборки (null означает выбрать все атрибуты)
+                );
+
+                // Отправьте запрос
+                SearchResponse response = (SearchResponse)connection.SendRequest(request);
+
+                // Обработайте результат
+                foreach (SearchResultEntry entry in response.Entries)
+                {
+                    if (entry.Attributes.Contains("sAMAccountName"))
+                    {
+                        string stringValue = GetStringFromAttribute(entry.Attributes["sAMAccountName"][0]);
+
+                        ldapError = null;
+                        return stringValue;
+                    }
+                    else
+                    {
+                        ldapError = "sAMAccountName not found for this name.";
+                        return null;
+                    }
+                }
+                ldapError = "Login undefined.";
+                return null;
+            }
+            catch (LdapException ex)
+            {
+                ldapError = $"LDAP Error: {ex.Message}";
+                return null;
+            }
+        }
+        public static String? GetUserName(string? cName, out string? ldapError)
+        {
+
+            LdapConnection connection = CreateLdapConnection();
 
             try
             {
@@ -452,11 +529,45 @@ namespace ActiveDirectoryController
         }
         private static string GetStringFromAttribute(object attribute)
         {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             if (attribute is byte[] byteArray)
             {
                 return Encoding.GetEncoding("Windows-1251").GetString(byteArray);
             }
             return attribute.ToString();
+        }
+        private static LdapConnection CreateLdapConnection(string? ldapUsername, string? ldapPassword)
+        {
+            ldapUsername = ldapDomain + "\\" + ldapUsername;
+            // Укажите учетные данные для подключения к серверу
+
+            // Создайте объект LdapDirectoryIdentifier для указания сервера и порта
+            LdapDirectoryIdentifier identifier = new LdapDirectoryIdentifier(ldapServer);
+
+            // Создайте объект NetworkCredential для указания учетных данных
+            NetworkCredential credential = new NetworkCredential(ldapUsername, ldapPassword);
+
+            LdapConnection connection = new LdapConnection(identifier, credential)
+            {
+                AuthType = AuthType.Basic // Укажите тип аутентификации
+            };
+
+            return connection;
+        }
+        private static LdapConnection CreateLdapConnection()
+        {
+            // Создайте объект LdapDirectoryIdentifier для указания сервера и порта
+            LdapDirectoryIdentifier identifier = new LdapDirectoryIdentifier(ldapServer);
+
+            // Создайте объект NetworkCredential для указания учетных данных
+            NetworkCredential credential = CredentialCache.DefaultNetworkCredentials;
+
+            LdapConnection connection = new LdapConnection(identifier, credential)
+            {
+                AuthType = AuthType.Ntlm // Укажите тип аутентификации
+            };
+
+            return connection;
         }
         public static List<ADUser>? GetGroupUsers(string groupName, string objectClass, string ldapUsername, string ldapPassword, out string? ldapError, out int counter)
         {

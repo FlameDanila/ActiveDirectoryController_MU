@@ -1,10 +1,12 @@
 using ActiveDirectoryController;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.ObjectPool;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using Newtonsoft.Json;
 using System.Collections;
@@ -20,252 +22,302 @@ using Ldap = System.DirectoryServices.Protocols;
 
 internal class APIRoutes
 {
-    private static string? ldapServer = System.Configuration.ConfigurationManager.AppSettings.Get("ldapServer");
-    public static IHostBuilder CreateHostBuilder(string[] args) =>
-    Host.CreateDefaultBuilder(args)
-        .ConfigureWebHostDefaults(webBuilder =>
-        {
-            webBuilder.UseStartup<IStartup>();
-            webBuilder.UseUrls("http://192.168.91.239:4040"); // Укажите здесь нужный IP-адрес и порт
-            //webBuilder.UseUrls("http://192.168.91.133:5000"); // Укажите здесь нужный IP-адрес и порт
-        });
-    private static void Main(string[] args)
+    public static void Main(string[] args)
     {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        CreateHostBuilder(args).Build().Run();
+    }
 
-        var builder = WebApplication.CreateBuilder(args);
-        var app = builder.Build();
-
-        IWebHostBuilder CreateWebHostBuilder(string[] args) =>
-            (IWebHostBuilder)WebHost.CreateDefaultBuilder(args)
-                    .UseUrls("http://localhost:4040")  // Замените 5000 на нужный вам порт
-                    .UseStartup<IStartup>()
-                    .Build();
-
-        app.MapGet("/ListADUsers", async(context) =>
-        {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
+    public static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .ConfigureWebHostDefaults(webBuilder =>
             {
-                context.Response.ContentType = "application/json";
-                string? ldapErrorResponce = "";
-                int counter = 0;
-                List<ADUser>? userName = LDAPRequests.GetUsersList(isAuth[0], isAuth[1], out ldapErrorResponce, out counter); // Спрашиваем пользователя у ldap
-                if (ldapErrorResponce == null)
-                {
-                    if (userName != null)
-                    {
-                        string jsonString = System.Text.Json.JsonSerializer.Serialize(userName, new JsonSerializerOptions { WriteIndented = true });
-                        jsonString = "{\"Users\": " + jsonString + ", \"Total\": "+counter+"}";
+                //webBuilder.UseKestrel(options =>
+                //{
+                //    options.ListenAnyIP(4040); // Установка порта Kestrel
+                //});
+                webBuilder.UseIISIntegration();
+                webBuilder.UseStartup<Startup>(); // Указываем Startup класс
+            });
+}
+[Authorize]
+public class Startup
+{
+    private static string? ldapServer = System.Configuration.ConfigurationManager.AppSettings.Get("ldapServer");
 
-                        await context.Response.WriteAsync(jsonString);
-                    }
-                    else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Users not found\"}}"); }
-                }
-                else
-                { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
-            }
-        });
-        app.MapGet("/GetAdUser", async (context) =>
+    // Экземплярный метод ConfigureServices
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddAuthentication(Microsoft.AspNetCore.Server.IISIntegration.IISDefaults.AuthenticationScheme);
+        services.AddAuthorization();
+    }
+
+    // Экземплярный метод Configure
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        app.UseRouting();
+        app.UseAuthentication(); // Middleware для аутентификации
+        app.UseAuthorization();  // Middleware для авторизации
+
+        app.UseEndpoints(endpoints =>
         {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
+            endpoints.MapGet("/testAuth", async context =>
             {
-                context.Response.ContentType = "application/json";
-                if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                if (context.User.Identity?.IsAuthenticated == true)
                 {
-                    var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-                    string? name = queryParameters["name"];
-
-                    if (name != null) // Параметр name не пуст
+                    context.Response.ContentType = "application/json";
+                    if (context.Request.QueryString.HasValue) // Есть параметры запроса
                     {
-                        string? ldapErrorResponce = "";
-                        string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
-                        if (userName != null)
+                        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                        string? name = queryParameters["name"];
+
+                        if (name != null) // Параметр name не пуст
                         {
-                            userName = $"{{\"sAMAccountName\":\"{userName}\"}}";
+                            string? ldapErrorResponce = "";
+                            //string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
+                            string? userName = LDAPRequests.GetUserName(name, out ldapErrorResponce); // Спрашиваем пользователя у ldap
+                            if (userName != null)
+                            {
+                                userName = $"{{\"sAMAccountName\":\"{userName}\"}}";
 
-                            await context.Response.WriteAsync(userName);
+                                await context.Response.WriteAsync(userName);
+                            }
+                            else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
                         }
-                        else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}");}
+                        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'name' is missing or null!\"}}"); }
                     }
                     else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'name' is missing or null!\"}}"); }
+
                 }
-                else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'name' is missing or null!\"}}"); }
-            }
-        });
-        app.MapPost("/DeactivateADUser", async (context) =>
-        {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
-            {
-                context.Response.ContentType = "application/json";
-                if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                else
                 {
-                    var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-                    string? name = queryParameters["name"];
-                    string? sAMAccountName = queryParameters["sAMAccountName"];
-
-                    if (sAMAccountName != null)
+                    context.Response.StatusCode = 401;
+                    await context.Response.WriteAsync("{\"Error\": \"Требуется аутентификация\"}");
+                }
+            });
+            endpoints.MapGet("/ListADUsers", async (context) =>
+            {
+                //string[] isAuth = await AurhorizeRequestUser(context);
+                //if (isAuth != null)
+                //{
+                    context.Response.ContentType = "application/json";
+                    string? ldapErrorResponce = "";
+                    int counter = 0;
+                    List<ADUser>? userName = LDAPRequests.GetUsersList("oda", "Qwe123456", out ldapErrorResponce, out counter); // Спрашиваем пользователя у ldap
+                    if (ldapErrorResponce == null)
                     {
-                        string? ldapErrorResponce = "";
-                        bool disable = LDAPRequests.DisableUserAccount(sAMAccountName, isAuth[0], isAuth[1], out ldapErrorResponce);
-                        if (disable)
-                        {
-                            await context.Response.WriteAsync("Success");
-                        }
-                        else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
-                    }
-                    else if(name != null)
-                    {
-                        string? ldapErrorResponce = "";
-                        string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
                         if (userName != null)
                         {
-                            bool disable = LDAPRequests.DisableUserAccount(userName, isAuth[0], isAuth[1], out ldapErrorResponce);
+                            string jsonString = System.Text.Json.JsonSerializer.Serialize(userName, new JsonSerializerOptions { WriteIndented = true });
+                            jsonString = "{\"Users\": " + jsonString + ", \"Total\": " + counter + "}";
+
+                            await context.Response.WriteAsync(jsonString);
+                        }
+                        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Users not found\"}}"); }
+                    }
+                    else
+                    { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                //}
+            });
+            endpoints.MapGet("/GetAdUser", async (context) =>
+            {
+                //string[] isAuth = await AurhorizeRequestUser(context);
+
+                //if (isAuth != null)
+                //{
+                    context.Response.ContentType = "application/json";
+                    if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                    {
+                        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                        string? name = queryParameters["name"];
+
+                        if (name != null) // Параметр name не пуст
+                        {
+                            string? ldapErrorResponce = "";
+                            //string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
+                            string? userName = LDAPRequests.GetUserName(name, "oda", "Qwe123456", out ldapErrorResponce); // Спрашиваем пользователя у ldap
+                            if (userName != null)
+                            {
+                                userName = $"{{\"sAMAccountName\":\"{userName}\"}}";
+
+                                await context.Response.WriteAsync(userName);
+                            }
+                            else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                        }
+                        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'name' is missing or null!\"}}"); }
+                    }
+                    else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'name' is missing or null!\"}}"); }
+                //}
+            });
+            endpoints.MapPost("/DeactivateADUser", async (context) =>
+            {
+                string[] isAuth = await AurhorizeRequestUser(context);
+
+                if (isAuth != null)
+                {
+                    context.Response.ContentType = "application/json";
+                    if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                    {
+                        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                        string? name = queryParameters["name"];
+                        string? sAMAccountName = queryParameters["sAMAccountName"];
+
+                        if (sAMAccountName != null)
+                        {
+                            string? ldapErrorResponce = "";
+                            bool disable = LDAPRequests.DisableUserAccount(sAMAccountName, isAuth[0], isAuth[1], out ldapErrorResponce);
                             if (disable)
                             {
                                 await context.Response.WriteAsync("Success");
                             }
                             else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
                         }
-                        else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                        else if (name != null)
+                        {
+                            string? ldapErrorResponce = "";
+                            string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
+                            if (userName != null)
+                            {
+                                bool disable = LDAPRequests.DisableUserAccount(userName, isAuth[0], isAuth[1], out ldapErrorResponce);
+                                if (disable)
+                                {
+                                    await context.Response.WriteAsync("Success");
+                                }
+                                else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                            }
+                            else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                        }
+                        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'name' or 'sAMAccountName' is missing or null!\"}}"); }
                     }
                     else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'name' or 'sAMAccountName' is missing or null!\"}}"); }
                 }
-                else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'name' or 'sAMAccountName' is missing or null!\"}}"); }
-            }
-        });
-        app.MapPost("/ActivateADUser", async (context) =>
-        {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
+            });
+            endpoints.MapPost("/ActivateADUser", async (context) =>
             {
-                context.Response.ContentType = "application/json";
-                if (context.Request.QueryString.HasValue) // Есть параметры запроса
-                {
-                    var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-                    string? name = queryParameters["name"];
-                    string? sAMAccountName = queryParameters["sAMAccountName"];
+                string[] isAuth = await AurhorizeRequestUser(context);
 
-                    if (sAMAccountName != null)
+                if (isAuth != null)
+                {
+                    context.Response.ContentType = "application/json";
+                    if (context.Request.QueryString.HasValue) // Есть параметры запроса
                     {
-                        await context.Response.WriteAsync(LDAPRequests.EnableUserAccount(sAMAccountName, isAuth[0], isAuth[1]).ToString());
-                    }
-                    else if (name != null)
-                    {
-                        string? ldapErrorResponce = "";
-                        string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
-                        if (userName != null)
+                        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                        string? name = queryParameters["name"];
+                        string? sAMAccountName = queryParameters["sAMAccountName"];
+
+                        if (sAMAccountName != null)
                         {
-                            await context.Response.WriteAsync(LDAPRequests.EnableUserAccount(userName, isAuth[0], isAuth[1]).ToString());
+                            await context.Response.WriteAsync(LDAPRequests.EnableUserAccount(sAMAccountName, isAuth[0], isAuth[1]).ToString());
+                        }
+                        else if (name != null)
+                        {
+                            string? ldapErrorResponce = "";
+                            string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
+                            if (userName != null)
+                            {
+                                await context.Response.WriteAsync(LDAPRequests.EnableUserAccount(userName, isAuth[0], isAuth[1]).ToString());
+                            }
+                            else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                        }
+                        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'name' or 'sAMAccountName' is missing or null!\"}}"); }
+                    }
+                    else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'name' or 'sAMAccountName' is missing or null!\"}}"); }
+                }
+            });
+            endpoints.MapDelete("/DeleteADUser", async (context) =>
+            {
+                //string[] isAuth = await AurhorizeRequestUser(context);
+
+                //if (isAuth != null)
+                //{
+                //    if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                //    {
+                //        context.Response.ContentType = "application/json";
+                //        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                //        string userDn = queryParameters["userDn"];
+
+                //        if (userDn != null)
+                //        {
+                //            string? ldapErrorResponce = "";
+                //            bool deleted = LDAPRequests.DeleteUser(isAuth[0], isAuth[1], userDn, out ldapErrorResponce);
+
+                //            if (deleted)
+                //            {
+                //                await context.Response.WriteAsync(deleted.ToString());
+                //            }
+                //            else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                //        }
+                //        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'userDn' is missing or null!\"}}"); }
+                //    }
+                //    else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'userDn' is missing or null!\"}}"); }
+                //}
+            });
+            endpoints.MapPost("/CreateADUser", async (context) =>
+            {
+                string[] isAuth = await AurhorizeRequestUser(context);
+
+                if (isAuth != null)
+                {
+                    context.Response.ContentType = "application/json";
+                    if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                    {
+                        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                        string? sAMAccountName = queryParameters["sAMAccountName"];
+                        string? cName = queryParameters["cName"];
+                        string? firstName = queryParameters["firstName"];
+                        string? lastName = queryParameters["lastName"];
+                        string? displayName = queryParameters["displayName"];
+                        string? email = queryParameters["email"];
+                        string? password = queryParameters["password"];
+                        string? organizationalUnitDN = queryParameters["organizationalUnitDN"];
+
+                        // Проверка обязательных параметров
+                        if (string.IsNullOrWhiteSpace(sAMAccountName) ||       // sAMAccountName — это логин пользователя в Active Directory.
+                            string.IsNullOrWhiteSpace(cName) ||                // CN (Common Name) — это полное имя пользователя, которое используется как идентификатор объекта в LDAP.
+                            string.IsNullOrWhiteSpace(firstName) ||            // FirstName — имя пользователя.
+                            string.IsNullOrWhiteSpace(lastName) ||             // LastName — фамилия пользователя.
+                            string.IsNullOrWhiteSpace(displayName) ||          // DisplayName — отображаемое имя пользователя, которое видно в каталогах и адресных книгах.
+                            string.IsNullOrWhiteSpace(email) ||                // Email — электронная почта пользователя.
+                            string.IsNullOrWhiteSpace(password) ||             // Password — пароль для новой учетной записи пользователя.
+                            string.IsNullOrWhiteSpace(organizationalUnitDN))   // OrganizationalUnitDN — DN организационной единицы (OU), в которой будет создан пользователь.
+                        {
+                            await context.Response.WriteAsync("{\"Error\": \"Missing required attributes. Use LdapRequaredHelp request for more information\"}");
+                            return;
+                        }
+
+                        ADUser newUser = new ADUser
+                        {
+                            sAMAccountName = sAMAccountName,
+                            cName = cName,
+                            FirstName = firstName,
+                            LastName = lastName,
+                            DisplayName = displayName,
+                            Email = email,
+                            Password = password,
+                            OrganizationalUnitDN = organizationalUnitDN
+                        };
+
+                        string? ldapErrorResponce = "";
+                        bool created = LDAPRequests.CreateUser(isAuth[0], isAuth[1], newUser, out ldapErrorResponce);
+
+                        if (created)
+                        {
+                            await context.Response.WriteAsync(created.ToString());
                         }
                         else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
                     }
-                    else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'name' or 'sAMAccountName' is missing or null!\"}}"); }
+                    else { context.Response.StatusCode = 500; await context.Response.WriteAsync("{\"Error\": \"Missing required attributes. Use LdapRequaredHelp request for more information\"}"); }
                 }
-                else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'name' or 'sAMAccountName' is missing or null!\"}}"); }
-            }
-        });
-        app.MapDelete("/DeleteADUser", async (context) =>
-        {
-            //string[] isAuth = await AurhorizeRequestUser(context);
-
-            //if (isAuth != null)
-            //{
-            //    if (context.Request.QueryString.HasValue) // Есть параметры запроса
-            //    {
-            //        context.Response.ContentType = "application/json";
-            //        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-            //        string userDn = queryParameters["userDn"];
-
-            //        if (userDn != null)
-            //        {
-            //            string? ldapErrorResponce = "";
-            //            bool deleted = LDAPRequests.DeleteUser(isAuth[0], isAuth[1], userDn, out ldapErrorResponce);
-
-            //            if (deleted)
-            //            {
-            //                await context.Response.WriteAsync(deleted.ToString());
-            //            }
-            //            else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
-            //        }
-            //        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'userDn' is missing or null!\"}}"); }
-            //    }
-            //    else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Params 'userDn' is missing or null!\"}}"); }
-            //}
-        });
-        app.MapPost("/CreateADUser", async (context) =>
-        {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
+            });
+            endpoints.MapGet("/LdapRequaredHelp", async (context) =>
             {
-                context.Response.ContentType = "application/json";
-                if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                string[] isAuth = await AurhorizeRequestUser(context);
+
+                if (isAuth != null)
                 {
-                    var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-                    string? sAMAccountName = queryParameters["sAMAccountName"];
-                    string? cName = queryParameters["cName"];
-                    string? firstName = queryParameters["firstName"];
-                    string? lastName = queryParameters["lastName"];
-                    string? displayName = queryParameters["displayName"];
-                    string? email = queryParameters["email"];
-                    string? password = queryParameters["password"];
-                    string? organizationalUnitDN = queryParameters["organizationalUnitDN"];
-
-                    // Проверка обязательных параметров
-                    if (string.IsNullOrWhiteSpace(sAMAccountName) ||       // sAMAccountName — это логин пользователя в Active Directory.
-                        string.IsNullOrWhiteSpace(cName) ||                // CN (Common Name) — это полное имя пользователя, которое используется как идентификатор объекта в LDAP.
-                        string.IsNullOrWhiteSpace(firstName) ||            // FirstName — имя пользователя.
-                        string.IsNullOrWhiteSpace(lastName) ||             // LastName — фамилия пользователя.
-                        string.IsNullOrWhiteSpace(displayName) ||          // DisplayName — отображаемое имя пользователя, которое видно в каталогах и адресных книгах.
-                        string.IsNullOrWhiteSpace(email) ||                // Email — электронная почта пользователя.
-                        string.IsNullOrWhiteSpace(password) ||             // Password — пароль для новой учетной записи пользователя.
-                        string.IsNullOrWhiteSpace(organizationalUnitDN))   // OrganizationalUnitDN — DN организационной единицы (OU), в которой будет создан пользователь.
+                    var requiredParameters = new
                     {
-                        await context.Response.WriteAsync("{\"Error\": \"Missing required attributes. Use LdapRequaredHelp request for more information\"}");
-                        return;
-                    }
-
-                    ADUser newUser = new ADUser
-                    {
-                        sAMAccountName = sAMAccountName,
-                        cName = cName,
-                        FirstName = firstName,
-                        LastName = lastName,
-                        DisplayName = displayName,
-                        Email = email,
-                        Password = password,
-                        OrganizationalUnitDN = organizationalUnitDN
-                    };
-
-                    string? ldapErrorResponce = "";
-                    bool created = LDAPRequests.CreateUser(isAuth[0], isAuth[1], newUser, out ldapErrorResponce);
-
-                    if (created)
-                    {
-                        await context.Response.WriteAsync(created.ToString());
-                    }
-                    else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
-                }
-                else { context.Response.StatusCode = 500; await context.Response.WriteAsync("{\"Error\": \"Missing required attributes. Use LdapRequaredHelp request for more information\"}"); }
-            }
-        });
-        app.MapGet("/LdapRequaredHelp", async (context) =>
-        {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
-            {
-                var requiredParameters = new
-                {
-                    Parameters = new[]
-                    {
+                        Parameters = new[]
+                        {
                         new
                         {
                             Name = "userDn",
@@ -320,110 +372,110 @@ internal class APIRoutes
                             Description = "OrganizationalUnitDN — DN организационной единицы (OU), в которой будет создан пользователь.",
                             CreateRequired = true
                         }
-                    }
-                };
+                        }
+                    };
 
-                string jsonResponse = System.Text.Json.JsonSerializer.Serialize(requiredParameters);
-                context.Response.ContentType = "application/json";
-                await context.Response.WriteAsync(jsonResponse);
-            }
-        });
-        app.MapGet("/ListADUsersGroup", async (context) =>
-        {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
-            {
-                context.Response.ContentType = "application/json";
-                if (context.Request.QueryString.HasValue) // Есть параметры запроса
-                {
-                    var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-                    string? groupName = queryParameters["groupName"];
-                    string? objectClass = queryParameters["objectClass"];
-
-                    // Проверка обязательных параметров
-                    if (string.IsNullOrWhiteSpace(groupName) ||
-                        string.IsNullOrWhiteSpace(objectClass))
-                    {
-                        await context.Response.WriteAsync("{\"Error\": \"Param 'groupName' and 'objectClass' is missing or null!\"}");
-                    }
-
-                    string? ldapErrorResponce = "";
-                    List<ADUser>? users = LDAPRequests.GetGroupUsers(groupName, objectClass, isAuth[0], isAuth[1], out ldapErrorResponce, out int counter); // Спрашиваем пользователя у ldap
-                    
-                    if (users != null)
-                    {
-                        string jsonString = System.Text.Json.JsonSerializer.Serialize(users, new JsonSerializerOptions { WriteIndented = true });
-                        jsonString = "{\"Users\": " + jsonString + ", \"Total\": " + counter + "}";
-
-                        await context.Response.WriteAsync(jsonString);
-                    }
-                    else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                    string jsonResponse = System.Text.Json.JsonSerializer.Serialize(requiredParameters);
+                    context.Response.ContentType = "application/json";
+                    await context.Response.WriteAsync(jsonResponse);
                 }
-                else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'groupName' and 'objectClass' is missing or null!\"}}"); }
-
-            }
-        });
-        app.MapGet("/GetAdGroup", async (context) =>
-        {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
+            });
+            endpoints.MapGet("/ListADUsersGroup", async (context) =>
             {
-                context.Response.ContentType = "application/json";
-                if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                string[] isAuth = await AurhorizeRequestUser(context);
+
+                if (isAuth != null)
                 {
-                    var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-                    string? name = queryParameters["name"];
-
-                    if (name != null) // Параметр name не пуст
+                    context.Response.ContentType = "application/json";
+                    if (context.Request.QueryString.HasValue) // Есть параметры запроса
                     {
-                        string? ldapErrorResponce = "";
-                        string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
-                        if (userName != null)
-                        {
-                            userName = $"{{\"sAMAccountName\":\"{userName}\"}}";
+                        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                        string? groupName = queryParameters["groupName"];
+                        string? objectClass = queryParameters["objectClass"];
 
-                            await context.Response.WriteAsync(userName);
+                        // Проверка обязательных параметров
+                        if (string.IsNullOrWhiteSpace(groupName) ||
+                            string.IsNullOrWhiteSpace(objectClass))
+                        {
+                            await context.Response.WriteAsync("{\"Error\": \"Param 'groupName' and 'objectClass' is missing or null!\"}");
+                        }
+
+                        string? ldapErrorResponce = "";
+                        List<ADUser>? users = LDAPRequests.GetGroupUsers(groupName, objectClass, isAuth[0], isAuth[1], out ldapErrorResponce, out int counter); // Спрашиваем пользователя у ldap
+
+                        if (users != null)
+                        {
+                            string jsonString = System.Text.Json.JsonSerializer.Serialize(users, new JsonSerializerOptions { WriteIndented = true });
+                            jsonString = "{\"Users\": " + jsonString + ", \"Total\": " + counter + "}";
+
+                            await context.Response.WriteAsync(jsonString);
                         }
                         else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                    }
+                    else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'groupName' and 'objectClass' is missing or null!\"}}"); }
+
+                }
+            });
+            endpoints.MapGet("/GetAdGroup", async (context) =>
+            {
+                string[] isAuth = await AurhorizeRequestUser(context);
+
+                if (isAuth != null)
+                {
+                    context.Response.ContentType = "application/json";
+                    if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                    {
+                        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                        string? name = queryParameters["name"];
+
+                        if (name != null) // Параметр name не пуст
+                        {
+                            string? ldapErrorResponce = "";
+                            string? userName = LDAPRequests.GetUserName(name, isAuth[0], isAuth[1], out ldapErrorResponce); // Спрашиваем пользователя у ldap
+                            if (userName != null)
+                            {
+                                userName = $"{{\"sAMAccountName\":\"{userName}\"}}";
+
+                                await context.Response.WriteAsync(userName);
+                            }
+                            else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                        }
+                        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'name' is missing or null!\"}}"); }
                     }
                     else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'name' is missing or null!\"}}"); }
                 }
-                else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'name' is missing or null!\"}}"); }
-            }
-        });
-        app.MapGet("/GetAdGroupType", async (context) =>
-        {
-            string[] isAuth = await AurhorizeRequestUser(context);
-
-            if (isAuth != null)
+            });
+            endpoints.MapGet("/GetAdGroupType", async (context) =>
             {
-                context.Response.ContentType = "application/json";
-                if (context.Request.QueryString.HasValue) // Есть параметры запроса
+                string[] isAuth = await AurhorizeRequestUser(context);
+
+                if (isAuth != null)
                 {
-                    var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-                    string? cName = queryParameters["cName"];
-
-                    if (cName != null) // Параметр name не пуст
+                    context.Response.ContentType = "application/json";
+                    if (context.Request.QueryString.HasValue) // Есть параметры запроса
                     {
-                        string? ldapErrorResponce = "";
-                        string? groupInfo = "";
-                        bool getGroup = LDAPRequests.GetGroupType(isAuth[0], isAuth[1], cName, out groupInfo, out ldapErrorResponce); // Спрашиваем пользователя у ldap
-                        if (getGroup)
-                        {
-                            groupInfo = $"{{\"Info\":\"{groupInfo}\"}}";
+                        var queryParameters = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+                        string? cName = queryParameters["cName"];
 
-                            await context.Response.WriteAsync(groupInfo);
+                        if (cName != null) // Параметр name не пуст
+                        {
+                            string? ldapErrorResponce = "";
+                            string? groupInfo = "";
+                            bool getGroup = LDAPRequests.GetGroupType(isAuth[0], isAuth[1], cName, out groupInfo, out ldapErrorResponce); // Спрашиваем пользователя у ldap
+                            if (getGroup)
+                            {
+                                groupInfo = $"{{\"Info\":\"{groupInfo}\"}}";
+
+                                await context.Response.WriteAsync(groupInfo);
+                            }
+                            else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
                         }
-                        else { context.Response.StatusCode = 501; await context.Response.WriteAsync($"{{\"Error\": \"{ldapErrorResponce}\"}}"); }
+                        else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'cName' is missing or null!\"}}"); }
                     }
                     else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'cName' is missing or null!\"}}"); }
                 }
-                else { context.Response.StatusCode = 500; await context.Response.WriteAsync($"{{\"Error\": \"Param 'cName' is missing or null!\"}}"); }
-            }
+            });
         });
-        app.Run();
     }
     private async static Task<string[]> AurhorizeRequestUser(HttpContext context)
     {
@@ -445,7 +497,7 @@ internal class APIRoutes
                 bool isAuthenticated = BasicAuth.AuthenticateUser(ldapPath, username, password); // Разбираем заголовок Authorization и проверяем пользователя
                 if (isAuthenticated)
                 {
-                    return [username, password];
+                    return new string[] { username, password };
                 }
                 else
                 {

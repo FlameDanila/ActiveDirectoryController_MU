@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ActiveDirectoryController")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+52a305392169d22810bfdf806e7dd631230961db")]
 [assembly: System.Reflection.AssemblyProductAttribute("ActiveDirectoryController")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ActiveDirectoryController")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

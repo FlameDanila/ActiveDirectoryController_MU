@@ -1,6 +1,7 @@
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\PubTmp\Out\App.config
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\PubTmp\Out\appsettings.Development.json
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\PubTmp\Out\appsettings.json
+C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\PubTmp\Out\libman.json
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\PubTmp\Out\ActiveDirectoryController.dll.config
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\PubTmp\Out\ActiveDirectoryController.pdb
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\PubTmp\Out\aspnetcorev2_inprocess.dll

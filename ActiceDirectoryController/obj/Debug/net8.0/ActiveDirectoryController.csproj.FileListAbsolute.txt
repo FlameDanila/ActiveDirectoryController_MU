@@ -44,3 +44,5 @@ C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\ob
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Debug\net8.0\ref\ActiveDirectoryController.dll
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\bin\Debug\net8.0\System.DirectoryServices.AccountManagement.dll
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\bin\Debug\net8.0\runtimes\win\lib\net8.0\System.DirectoryServices.AccountManagement.dll
+C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Debug\net8.0\ActiveDirectoryController.sourcelink.json
+C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\bin\Debug\net8.0\libman.json

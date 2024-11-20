@@ -362,3 +362,5 @@ C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\ob
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\ActiveDirectoryController.genruntimeconfig.cache
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\ref\ActiveDirectoryController.dll
 C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\bin\Release\net8.0\win-x86\System.DirectoryServices.AccountManagement.dll
+C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\bin\Release\net8.0\win-x86\libman.json
+C:\Users\oda\source\repos\ActiceDirectoryController\ActiceDirectoryController\obj\Release\net8.0\win-x86\ActiveDirectoryController.sourcelink.json

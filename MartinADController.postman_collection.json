@@ -1,0 +1,358 @@
+{
+	"info": {
+		"_postman_id": "27a942a9-41de-434d-8c2c-aeb7950e6dfe",
+		"name": "MartinADController",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "20340196"
+	},
+	"item": [
+		{
+			"name": "GetADUser",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "{{LDAPPass}}",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "{{LDAPLogin}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{LDAPLink}}GetAdUser?Name=сус",
+					"host": [
+						"{{LDAPLink}}GetAdUser"
+					],
+					"query": [
+						{
+							"key": "Name",
+							"value": "сус"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ListADUsers",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "username",
+							"value": "{{LDAPLogin}}",
+							"type": "string"
+						},
+						{
+							"key": "password",
+							"value": "{{LDAPPass}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{LDAPLink}}ListADUsers",
+					"host": [
+						"{{LDAPLink}}ListADUsers"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "LdapRequaredHelp",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{LDAPLink}}LdapRequaredHelp",
+					"host": [
+						"{{LDAPLink}}LdapRequaredHelp"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ActivateADUser",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "{{LDAPPass}}",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "{{LDAPLogin}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{LDAPLink}}ActivateADUser?Name=John Doe",
+					"host": [
+						"{{LDAPLink}}ActivateADUser"
+					],
+					"query": [
+						{
+							"key": "Name",
+							"value": "John Doe"
+						},
+						{
+							"key": "sAMAccountName",
+							"value": "test5",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "CreateADUser",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "{{LDAPPass}}",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "{{LDAPLogin}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{LDAPLink}}CreateADUser?sAMAccountName=test8&cName=test 8&FirstName=test&LastName=8&DisplayName=test8&Email=test8@martinural.ru&Password=L$d666315&OrganizationalUnitDN=CN=Users,DC=tmn,DC=martinural,DC=ru",
+					"host": [
+						"{{LDAPLink}}CreateADUser"
+					],
+					"query": [
+						{
+							"key": "sAMAccountName",
+							"value": "test8"
+						},
+						{
+							"key": "cName",
+							"value": "test 8"
+						},
+						{
+							"key": "FirstName",
+							"value": "test"
+						},
+						{
+							"key": "LastName",
+							"value": "8"
+						},
+						{
+							"key": "DisplayName",
+							"value": "test8"
+						},
+						{
+							"key": "Email",
+							"value": "test8@martinural.ru"
+						},
+						{
+							"key": "Password",
+							"value": "L$d666315"
+						},
+						{
+							"key": "OrganizationalUnitDN",
+							"value": "CN=Users,DC=tmn,DC=martinural,DC=ru"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "LdapRequaredHelp",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "{{LDAPPass}}",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "{{LDAPLogin}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{LDAPLink}}LdapRequaredHelp",
+					"host": [
+						"{{LDAPLink}}LdapRequaredHelp"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetAdGroupType",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "{{LDAPPass}}",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "{{LDAPLogin}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{LDAPLink}}GetAdGroupType?cName=mumail",
+					"host": [
+						"{{LDAPLink}}GetAdGroupType"
+					],
+					"query": [
+						{
+							"key": "cName",
+							"value": "mumail"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ListADUsersGroup",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "{{LDAPPass}}",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "{{LDAPLogin}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{LDAPLink}}ListADUsersGroup?groupName=mumail&objectClass=group",
+					"host": [
+						"{{LDAPLink}}ListADUsersGroup"
+					],
+					"query": [
+						{
+							"key": "groupName",
+							"value": "mumail"
+						},
+						{
+							"key": "objectClass",
+							"value": "group"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "LDAPLink",
+			"value": "http://192.168.91.239:4040/",
+			"type": "string"
+		},
+		{
+			"key": "LDAPPass",
+			"value": "Qwe123456",
+			"type": "string"
+		},
+		{
+			"key": "LDAPLogin",
+			"value": "oda",
+			"type": "string"
+		},
+		{
+			"key": "LDAPLink",
+			"value": "http://192.168.91.133:53899/",
+			"type": "string",
+			"disabled": true
+		}
+	]
+}
